@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Minimal Next.js + Supabase Demo
 
-## Getting Started
+This worktree contains a minimal message board built with:
 
-First, run the development server:
+- Next.js 16 App Router
+- Tailwind CSS 4
+- Supabase PostgreSQL
+- A single Route Handler at `src/app/api/messages/route.ts`
+
+## Local Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy the environment template:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Fill in your Supabase values in `.env.local`:
+
+```bash
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
+```
+
+4. Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor.
+
+5. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+6. Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- The app reads `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
+- It also accepts `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for compatibility.
+- The Route Handler uses a low-privilege key, so the included SQL enables read and insert policies for the `anon` role.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev
+npm run lint
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment To Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This project is deployable now. The guestbook API and database writes are working against Supabase.
 
-## Deploy on Vercel
+### Option A: Git-based deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Vercel automatically detects Next.js projects when you import a repository.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Push this worktree to a Git provider such as GitHub.
+2. In the Vercel dashboard, create a new Project and import that repository.
+3. Keep the detected framework as Next.js.
+4. Add these Environment Variables for Production, Preview, and Development:
+
+```bash
+SUPABASE_URL=https://zupeqwilhojgbynexvtd.supabase.co
+SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
+```
+
+5. Deploy the project.
+
+### Option B: CLI deployment
+
+If you do not want to push to Git yet, you can deploy directly from the project root:
+
+```bash
+npm i -g vercel
+vercel
+vercel --prod
+```
+
+### Current repository note
+
+This worktree is on the `project1-fullstack` branch and currently has no Git remote configured.
+If you want Vercel to redeploy on every push, connect it to a remote repository first.
+
+### After deployment
+
+After the first successful deployment:
+
+1. Open the generated `vercel.app` URL.
+2. Submit a test message from the deployed site.
+3. Confirm the new row appears in the Supabase `messages` table.
+
+### Custom domain
+
+Once the site is live, add your domain from the Vercel project Settings, then open Domains and follow the DNS instructions shown there.
