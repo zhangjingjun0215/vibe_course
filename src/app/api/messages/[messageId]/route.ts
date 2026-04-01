@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { parseMessageId } from "@/lib/board";
+import { deleteMessagesWithLogs } from "@/lib/moderation";
 import {
   createAdminSetupErrorResponse,
   createForbiddenResponse,
@@ -8,10 +9,7 @@ import {
   getAdminConfigStatus,
   getViewer,
 } from "@/lib/server-auth";
-import {
-  getSupabaseAdminClient,
-  getSupabaseConfigStatus,
-} from "@/lib/supabase";
+import { getSupabaseConfigStatus } from "@/lib/supabase";
 
 type MessageRouteContext = {
   params: Promise<{
@@ -49,31 +47,17 @@ export async function DELETE(
   }
 
   try {
-    const supabase = getSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("messages")
-      .delete()
-      .eq("id", messageId)
-      .select("id")
-      .maybeSingle<{ id: number }>();
+    const result = await deleteMessagesWithLogs([messageId], "delete_single");
 
-    if (error) {
-      return NextResponse.json(
-        {
-          error: "Failed to delete the message.",
-          details: error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!data) {
+    if (result.deleted.length === 0) {
       return NextResponse.json({ error: "Message not found." }, { status: 404 });
     }
 
     return NextResponse.json({
+      deletedIds: result.deleted.map((message) => message.id),
       success: true,
       viewer,
+      warning: result.warning,
     });
   } catch (error) {
     return NextResponse.json(

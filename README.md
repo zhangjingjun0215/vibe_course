@@ -5,6 +5,9 @@ This worktree now ships a simpler moderation model:
 - anyone can read and post anonymously
 - only the admin session can delete messages
 - the admin dashboard lives at `/admin`
+- every public note requires a nickname
+- each anonymous source gets a stable pixel avatar
+- bulk delete actions are written to a moderation log
 - rate limits are enforced by a server-side request fingerprint
 
 The app no longer depends on Supabase Auth or email magic links.
@@ -39,8 +42,10 @@ Keep this key server-only. Do not expose it in the browser or commit it to Git.
 
 This upgrade is required even if you already created an earlier `messages` table. The new SQL:
 
+- adds `nickname`
 - adds `updated_at`
 - adds `author_key`
+- creates `admin_logs`
 - keeps public reads enabled
 - allows anonymous inserts
 - removes public update and delete permissions
@@ -65,7 +70,7 @@ npm run dev
 - `GET /api/messages`
   returns the public feed and the current viewer mode
 - `POST /api/messages`
-  creates an anonymous message and applies the posting limits
+  creates an anonymous message with a required nickname and applies the posting limits
 - `DELETE /api/messages/[messageId]`
   deletes a message when the admin session is active
 - `POST /api/admin/session`
@@ -74,6 +79,8 @@ npm run dev
   clears the admin session
 - `GET /api/admin/messages`
   returns moderation data for the admin dashboard
+- `DELETE /api/admin/messages`
+  deletes multiple selected messages from the admin dashboard
 
 ## Anti-spam defaults
 
@@ -84,13 +91,20 @@ The app currently enforces:
 
 These checks happen in the route handler and rely on the `author_key` column added by the SQL migration.
 
+## Notes on avatars and moderation logs
+
+- Avatars are generated deterministically from the anonymous request fingerprint.
+- The nickname can change between posts, but the avatar stays stable for the same source bucket.
+- Every single delete and bulk delete action writes one row to `public.admin_logs`.
+
 ## Verification
 
 The current codebase passes:
 
 ```bash
+npm run test
 npm run lint
 npm run build
 ```
 
-If this project was already migrated to the previous email-auth version, rerun `supabase/schema.sql` so the public insert policy and `author_key` column match the current runtime.
+If this project was already migrated to the previous anonymous version, rerun `supabase/schema.sql` so the new `nickname`, `author_key`, and `admin_logs` schema matches the current runtime.

@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import {
   MAX_MESSAGE_LENGTH,
   MAX_MESSAGES_ON_HOME,
+  MAX_NICKNAME_LENGTH,
   MAX_POSTS_PER_HOUR,
   MIN_SECONDS_BETWEEN_POSTS,
   normalizeMessageContent,
+  normalizeNickname,
   toPublicMessage,
   type MessageRow,
 } from "@/lib/board";
@@ -35,7 +37,7 @@ export async function GET() {
     const viewer = await getViewer();
     const { data, error } = await supabase
       .from("messages")
-      .select("id, content, created_at, updated_at, author_key")
+      .select("id, nickname, content, created_at, updated_at, author_key")
       .order("created_at", { ascending: false })
       .limit(MAX_MESSAGES_ON_HOME);
 
@@ -75,10 +77,10 @@ export async function POST(request: Request) {
   const supabase = getSupabaseServerClient();
   const viewer = await getViewer();
 
-  let payload: { content?: unknown };
+  let payload: { content?: unknown; nickname?: unknown };
 
   try {
-    payload = (await request.json()) as { content?: unknown };
+    payload = (await request.json()) as { content?: unknown; nickname?: unknown };
   } catch {
     return NextResponse.json(
       { error: "Request body must be valid JSON." },
@@ -87,6 +89,21 @@ export async function POST(request: Request) {
   }
 
   const content = normalizeMessageContent(payload.content);
+  const nickname = normalizeNickname(payload.nickname);
+
+  if (!nickname) {
+    return NextResponse.json(
+      { error: "Nickname is required." },
+      { status: 400 }
+    );
+  }
+
+  if (nickname.length > MAX_NICKNAME_LENGTH) {
+    return NextResponse.json(
+      { error: `Nickname must be ${MAX_NICKNAME_LENGTH} characters or less.` },
+      { status: 400 }
+    );
+  }
 
   if (!content) {
     return NextResponse.json(
@@ -174,8 +191,8 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabase
       .from("messages")
-      .insert([{ author_key: sourceKey, content }])
-      .select("id, content, created_at, updated_at, author_key")
+      .insert([{ author_key: sourceKey, content, nickname }])
+      .select("id, nickname, content, created_at, updated_at, author_key")
       .single<MessageRow>();
 
     if (error) {
