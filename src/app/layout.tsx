@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Minimal Message Board",
-  description: "A minimal Next.js and Supabase message board.",
+  title: "Field Notes Guestbook",
+  description:
+    "A Supabase-backed guestbook with anonymous posting, admin moderation, and anti-spam defaults.",
 };
 
 export default function RootLayout({
@@ -27,7 +28,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

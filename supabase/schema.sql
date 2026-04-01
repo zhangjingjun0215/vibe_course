@@ -4,21 +4,118 @@ create table if not exists public.messages (
   created_at timestamptz not null default now()
 );
 
+alter table public.messages
+  add column if not exists updated_at timestamptz;
+
+alter table public.messages
+  add column if not exists author_key text;
+
+update public.messages
+set created_at = now()
+where created_at is null;
+
+update public.messages
+set updated_at = created_at
+where updated_at is null;
+
+update public.messages
+set author_key = 'legacy'
+where author_key is null or char_length(trim(author_key)) = 0;
+
+alter table public.messages
+  alter column created_at set default now();
+
+alter table public.messages
+  alter column created_at set not null;
+
+alter table public.messages
+  alter column updated_at set default now();
+
+alter table public.messages
+  alter column updated_at set not null;
+
+alter table public.messages
+  alter column author_key set default 'legacy';
+
+alter table public.messages
+  alter column author_key set not null;
+
 create index if not exists messages_created_at_idx
   on public.messages (created_at desc);
+
+create index if not exists messages_author_key_created_at_idx
+  on public.messages (author_key, created_at desc);
+
+create or replace function public.set_message_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_message_updated_at on public.messages;
+create trigger set_message_updated_at
+  before update
+  on public.messages
+  for each row
+  execute function public.set_message_updated_at();
 
 alter table public.messages enable row level security;
 
 drop policy if exists "Allow anonymous read access to messages" on public.messages;
-create policy "Allow anonymous read access to messages"
+drop policy if exists "Allow anonymous insert access to messages" on public.messages;
+drop policy if exists "Public can read messages" on public.messages;
+drop policy if exists "Authenticated users can insert their own messages" on public.messages;
+drop policy if exists "Users can update their own messages" on public.messages;
+drop policy if exists "Users can delete their own messages" on public.messages;
+drop policy if exists "Admins can delete any message" on public.messages;
+drop policy if exists "Public can insert messages" on public.messages;
+
+create policy "Public can read messages"
   on public.messages
   for select
-  to anon
+  to anon, authenticated
   using (true);
 
-drop policy if exists "Allow anonymous insert access to messages" on public.messages;
-create policy "Allow anonymous insert access to messages"
+create policy "Public can insert messages"
   on public.messages
   for insert
-  to anon
-  with check (char_length(trim(content)) > 0);
+  to anon, authenticated
+  with check (
+    char_length(trim(content)) > 0
+    and char_length(content) <= 280
+    and char_length(trim(author_key)) > 0
+  );
+
+grant usage on schema public to anon, authenticated;
+grant select, insert on public.messages to anon, authenticated;
+revoke update, delete on public.messages from anon, authenticated;
+
+do $$
+declare
+  sequence_name text;
+  next_value bigint;
+begin
+  sequence_name := pg_get_serial_sequence('public.messages', 'id');
+
+  if sequence_name is null then
+    create sequence if not exists public.messages_id_seq;
+    alter sequence public.messages_id_seq owned by public.messages.id;
+
+    select coalesce(max(id), 0) + 1
+    into next_value
+    from public.messages;
+
+    perform setval('public.messages_id_seq', next_value, false);
+    alter table public.messages
+      alter column id set default nextval('public.messages_id_seq'::regclass);
+
+    sequence_name := 'public.messages_id_seq';
+  end if;
+
+  execute format('grant usage, select on sequence %s to anon, authenticated', sequence_name);
+end
+$$;

@@ -1,13 +1,15 @@
-# Minimal Next.js + Supabase Demo
+# Field Notes Guestbook
 
-This worktree contains a minimal message board built with:
+This worktree now ships a simpler moderation model:
 
-- Next.js 16 App Router
-- Tailwind CSS 4
-- Supabase PostgreSQL
-- A single Route Handler at `src/app/api/messages/route.ts`
+- anyone can read and post anonymously
+- only the admin session can delete messages
+- the admin dashboard lives at `/admin`
+- rate limits are enforced by a server-side request fingerprint
 
-## Local Setup
+The app no longer depends on Supabase Auth or email magic links.
+
+## Local setup
 
 1. Install dependencies:
 
@@ -21,16 +23,29 @@ npm install
 cp .env.example .env.local
 ```
 
-3. Fill in your Supabase values in `.env.local`:
+3. Fill in the required values:
 
 ```bash
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
+ADMIN_PASSWORD=choose-a-long-random-password
+SUPABASE_SECRET_KEY=your-server-side-supabase-secret
 ```
+
+`SUPABASE_SECRET_KEY` can also be provided as `SUPABASE_SERVICE_ROLE_KEY`.
+Keep this key server-only. Do not expose it in the browser or commit it to Git.
 
 4. Run the SQL in `supabase/schema.sql` inside the Supabase SQL editor.
 
-5. Start the development server:
+This upgrade is required even if you already created an earlier `messages` table. The new SQL:
+
+- adds `updated_at`
+- adds `author_key`
+- keeps public reads enabled
+- allows anonymous inserts
+- removes public update and delete permissions
+
+5. Start the app:
 
 ```bash
 npm run dev
@@ -38,63 +53,44 @@ npm run dev
 
 6. Open `http://localhost:3000`.
 
-## Supabase Notes
+## Runtime model
 
-- The app reads `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
-- It also accepts `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SUPABASE_ANON_KEY` for compatibility.
-- The Route Handler uses a low-privilege key, so the included SQL enables read and insert policies for the `anon` role.
+- The public board uses the low-privilege Supabase publishable key.
+- The moderator dashboard and delete actions use a server-only Supabase secret key.
+- Entering admin mode sets an HttpOnly cookie after the password is verified by the server.
+- No email delivery or Supabase Auth configuration is required.
 
-## Scripts
+## API summary
+
+- `GET /api/messages`
+  returns the public feed and the current viewer mode
+- `POST /api/messages`
+  creates an anonymous message and applies the posting limits
+- `DELETE /api/messages/[messageId]`
+  deletes a message when the admin session is active
+- `POST /api/admin/session`
+  enables admin mode with the configured password
+- `DELETE /api/admin/session`
+  clears the admin session
+- `GET /api/admin/messages`
+  returns moderation data for the admin dashboard
+
+## Anti-spam defaults
+
+The app currently enforces:
+
+- one post every 20 seconds per request fingerprint
+- at most 8 posts in a rolling hour
+
+These checks happen in the route handler and rely on the `author_key` column added by the SQL migration.
+
+## Verification
+
+The current codebase passes:
 
 ```bash
-npm run dev
 npm run lint
 npm run build
 ```
 
-## Deployment To Vercel
-
-This project is deployable now. The guestbook API and database writes are working against Supabase.
-
-### Option A: Git-based deployment
-
-Vercel automatically detects Next.js projects when you import a repository.
-
-1. Push this worktree to a Git provider such as GitHub.
-2. In the Vercel dashboard, create a new Project and import that repository.
-3. Keep the detected framework as Next.js.
-4. Add these Environment Variables for Production, Preview, and Development:
-
-```bash
-SUPABASE_URL=https://zupeqwilhojgbynexvtd.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
-```
-
-5. Deploy the project.
-
-### Option B: CLI deployment
-
-If you do not want to push to Git yet, you can deploy directly from the project root:
-
-```bash
-npm i -g vercel
-vercel
-vercel --prod
-```
-
-### Current repository note
-
-This worktree is on the `project1-fullstack` branch and currently has no Git remote configured.
-If you want Vercel to redeploy on every push, connect it to a remote repository first.
-
-### After deployment
-
-After the first successful deployment:
-
-1. Open the generated `vercel.app` URL.
-2. Submit a test message from the deployed site.
-3. Confirm the new row appears in the Supabase `messages` table.
-
-### Custom domain
-
-Once the site is live, add your domain from the Vercel project Settings, then open Domains and follow the DNS instructions shown there.
+If this project was already migrated to the previous email-auth version, rerun `supabase/schema.sql` so the public insert policy and `author_key` column match the current runtime.
